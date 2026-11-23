@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Чат без регистрации</title>
+<link rel="manifest" href="app-manifest.json">
+<meta name="theme-color" content="#1a1c26">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    background: #12131a;
+    color: #e6e6f0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: #1a1c26;
+    border-bottom: 1px solid #2a2d3a;
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 16px; font-weight: 600; }
+  #status {
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: #2a2d3a;
+    color: #9aa0b5;
+  }
+  #status.online { background: #173a2a; color: #5ad48e; }
+  #status.connecting { background: #3a3317; color: #e6c95a; }
+  header .spacer { flex: 1; }
+  #who { font-size: 12px; color: #9aa0b5; }
+  button {
+    background: #3b4a8f;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button:hover { background: #4a5cb0; }
+  button:disabled { background: #2a2d3a; color: #6a6f85; cursor: not-allowed; }
+  #gate {
+    margin: auto;
+    background: #1a1c26;
+    border: 1px solid #2a2d3a;
+    border-radius: 10px;
+    padding: 28px;
+    width: min(420px, 90vw);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  #gate h2 { font-size: 18px; }
+  #gate p { font-size: 13px; color: #9aa0b5; }
+  #gate label { font-size: 12px; color: #9aa0b5; display: block; margin-bottom: 4px; }
+  #gate input, #gate select {
+    width: 100%;
+    padding: 9px 12px;
+    border-radius: 6px;
+    border: 1px solid #2a2d3a;
+    background: #12131a;
+    color: #e6e6f0;
+    font-size: 14px;
+  }
+  #gate input:focus, #gate select:focus { outline: none; border-color: #3b4a8f; }
+  #gate .row { display: flex; gap: 10px; }
+  #gate .row > div { flex: 1; }
+  #gateErr { color: #e66a6a; font-size: 12px; min-height: 15px; }
+  #chatArea { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .msg { max-width: 75%; display: flex; flex-direction: column; }
+  .msg .meta { font-size: 11px; color: #7a7f96; margin-bottom: 2px; }
+  .msg .bubble {
+    background: #1e2130;
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 14px;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+  }
+  .msg.mine { align-self: flex-end; align-items: flex-end; }
+  .msg.mine .bubble { background: #2b3a75; }
+  .msg.sys { align-self: center; }
+  .msg.sys .meta { color: #6a6f85; font-style: italic; }
+  #composer {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #1a1c26;
+    border-top: 1px solid #2a2d3a;
+  }
+  #textInput {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 6px;
+    border: 1px solid #2a2d3a;
+    background: #12131a;
+    color: #e6e6f0;
+    font-size: 14px;
+  }
+  #textInput:focus { outline: none; border-color: #3b4a8f; }
+  #textInput:disabled { color: #6a6f85; }
+  #roomTag { font-size: 12px; color: #9aa0b5; }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <h2>Чат без регистрации</h2>
+  <p>Никаких аккаунтов и номеров телефона — просто выберите ник и войдите.</p>
+  <div>
+    <label for="nickInput">Ник</label>
+    <input id="nickInput" maxlength="20" placeholder="Например, Аноним">
+  </div>
+  <div class="row">
+    <div>
+      <label for="roomInput">Комната</label>
+      <input id="roomInput" maxlength="20" value="general" placeholder="general">
+    </div>
+    <div>
+      <label for="brokerSelect">Сервер</label>
+      <select id="brokerSelect">
+        <option value="wss://broker.emqx.io:8084/mqtt">EMQX</option>
+        <option value="wss://broker.hivemq.com:8884/mqtt">HiveMQ</option>
+        <option value="wss://test.mosquitto.org:8081">Mosquitto</option>
+      </select>
+    </div>
+  </div>
+  <div id="gateErr"></div>
+  <button id="enterBtn">Войти в чат</button>
+  <button id="installBtn" style="display:none">Установить приложение</button>
+</div>
+
+<div id="chatArea" style="display:none">
+  <header>
+    <h1>Чат</h1>
+    <span id="status">Не подключено</span>
+    <span id="roomTag"></span>
+    <span class="spacer"></span>
+    <span id="who"></span>
+    <button id="leaveBtn">Выйти</button>
+  </header>
+  <div id="messages"></div>
+  <div id="composer">
+    <input id="textInput" maxlength="500" placeholder="Введите сообщение..." disabled>
+    <button id="sendBtn" disabled>Отправить</button>
+  </div>
+</div>
+
+<script src="mqtt.min.js"></script>
+<script>
+  const TOPIC_ROOT = "mygames-free-chat/";
+  const gate = document.getElementById("gate");
+  const chatArea = document.getElementById("chatArea");
+  const nickInput = document.getElementById("nickInput");
+  const roomInput = document.getElementById("roomInput");
+  const brokerSelect = document.getElementById("brokerSelect");
+  const gateErr = document.getElementById("gateErr");
+  const enterBtn = document.getElementById("enterBtn");
+  const statusEl = document.getElementById("status");
+  const roomTag = document.getElementById("roomTag");
+  const whoEl = document.getElementById("who");
+  const messagesEl = document.getElementById("messages");
+  const textInput = document.getElementById("textInput");
+  const sendBtn = document.getElementById("sendBtn");
+  const leaveBtn = document.getElementById("leaveBtn");
+
+  let client = null;
+  let myNick = null;
+  let myTopic = null;
+
+  try {
+    const saved = localStorage.getItem("chatNick");
+    if (saved) nickInput.value = saved;
+  } catch (e) {}
+
+  function setStatus(text, cls) {
+    statusEl.textContent = text;
+    statusEl.className = cls || "";
+  }
+
+  function colorFor(nick) {
+    let h = 0;
+    for (let i = 0; i < nick.length; i++) h = (h * 31 + nick.charCodeAt(i)) >>> 0;
+    return "hsl(" + (h % 360) + ", 45%, 55%)";
+  }
+
+  function addMsg(kind, nick, text) {
+    const wrap = document.createElement("div");
+    wrap.className = "msg " + kind;
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    if (kind === "sys") {
+      meta.textContent = text;
+    } else {
+      const time = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+      meta.textContent = nick + " · " + time;
+      bubble.textContent = text;
+      if (nick === myNick) wrap.classList.add("mine");
+    }
+    wrap.appendChild(meta);
+    wrap.appendChild(bubble);
+    messagesEl.appendChild(wrap);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function publish(obj) {
+    if (!client || !client.connected) return;
+    client.publish(myTopic, JSON.stringify(obj), { qos: 0 });
+  }
+
+  enterBtn.addEventListener("click", enterChat);
+  nickInput.addEventListener("keydown", e => { if (e.key === "Enter") enterChat(); });
+
+  function enterChat() {
+    const nick = nickInput.value.trim();
+    const room = roomInput.value.trim().toLowerCase().replace(/[^a-zа-яё0-9_-]/gi, "");
+    if (!nick) { gateErr.textContent = "Введите ник."; return; }
+    if (!room) { gateErr.textContent = "Введите название комнаты."; return; }
+    gateErr.textContent = "";
+    enterBtn.disabled = true;
+    nickInput.disabled = true;
+    roomInput.disabled = true;
+    brokerSelect.disabled = true;
+    myNick = nick;
+    myTopic = TOPIC_ROOT + room;
+
+    try { localStorage.setItem("chatNick", nick); } catch (e) {}
+
+    setStatus("Подключение...", "connecting");
+    client = mqtt.connect(brokerSelect.value, {
+      clientId: "chat_" + nick.replace(/[^a-zA-Z0-9]/g, "_") + "_" + Math.random().toString(16).slice(2, 8),
+      clean: true,
+      connectTimeout: 10000,
+      reconnectPeriod: 3000,
+      will: { topic: myTopic, payload: JSON.stringify({ t: "leave", n: nick }), qos: 0, retain: false }
+    });
+
+    client.on("connect", () => {
+      client.subscribe(myTopic, { qos: 0 }, err => {
+        if (err) { setStatus("Ошибка подписки", ""); return; }
+        gate.style.display = "none";
+        chatArea.style.display = "flex";
+        roomTag.textContent = "комната: " + room;
+        whoEl.textContent = "вы: " + nick;
+        setStatus("Подключено", "online");
+        textInput.disabled = false;
+        sendBtn.disabled = false;
+        textInput.focus();
+        publish({ t: "join", n: nick });
+      });
+    });
+
+    client.on("message", (_topic, payload) => {
+      let data;
+      try { data = JSON.parse(payload.toString()); } catch (e) { return; }
+      if (!data || typeof data.t !== "string") return;
+      if (data.t === "msg" && typeof data.m === "string" && typeof data.n === "string" && data.m.trim()) {
+        addMsg("other", data.n, data.m);
+      } else if (data.t === "join" && typeof data.n === "string") {
+        if (data.n !== myNick) addMsg("sys", null, data.n + " вошёл в чат");
+      } else if (data.t === "leave" && typeof data.n === "string") {
+        if (data.n !== myNick) addMsg("sys", null, data.n + " покинул чат");
+      }
+    });
+
+    client.on("reconnect", () => setStatus("Переподключение...", "connecting"));
+    client.on("close", () => { if (!client.connected) setStatus("Отключено", ""); });
+    client.on("error", err => {
+      setStatus("Ошибка соединения", "");
+      if (client && !client.connected) addMsg("sys", null, "Ошибка соединения: " + (err && err.message ? err.message : "неизвестная"));
+    });
+  }
+
+  function send() {
+    const text = textInput.value.trim();
+    if (!text || !client || !client.connected) return;
+    publish({ t: "msg", n: myNick, m: text });
+    addMsg("mine", myNick, text);
+    textInput.value = "";
+    textInput.focus();
+  }
+
+  sendBtn.addEventListener("click", send);
+  textInput.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+
+  leaveBtn.addEventListener("click", () => {
+    publish({ t: "leave", n: myNick });
+    if (client) { try { client.end(true); } catch (e) {} }
+    client = null;
+    messagesEl.innerHTML = "";
+    chatArea.style.display = "none";
+    gate.style.display = "flex";
+    enterBtn.disabled = false;
+    nickInput.disabled = false;
+    roomInput.disabled = false;
+    brokerSelect.disabled = false;
+    setStatus("Не подключено", "");
+  });
+
+  window.addEventListener("beforeunload", () => { if (client) { try { client.end(true); } catch (e) {} } });
+
+  let deferredPrompt = null;
+  const installBtn = document.getElementById("installBtn");
+  window.addEventListener("beforeinstallprompt", e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    installBtn.style.display = "block";
+  });
+  installBtn.addEventListener("click", async () => {
+    if (!deferredPrompt) return;
+    installBtn.style.display = "none";
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+  });
+  window.addEventListener("appinstalled", () => { installBtn.style.display = "none"; });
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+  }
+
+</script>
+</body>
+</html>
